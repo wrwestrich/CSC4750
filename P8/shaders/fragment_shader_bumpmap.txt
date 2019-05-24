@@ -1,0 +1,54 @@
+//Fragment shader for moon bump map
+
+//from the vertex shader
+varying vec3 g_transformedNormal;
+varying vec4 g_vertexPos;
+
+uniform sampler2D colorMap;
+uniform sampler2D normalMap;
+
+void main(){
+  
+  vec3 lVec = normalize(gl_LightSource[0].position.xyz - g_vertexPos.xyz);
+
+  vec3 cam = vec3(0.0,0.0,0.0);
+  vec3 vVec = normalize(cam - g_vertexPos.xyz);
+
+  vec3 n = normalize(g_transformedNormal);
+  vec3 b_up = vec3(0.0,1.0,0.0);
+  float denom = 1.0 / (sqrt(1.0 - (dot(b_up, n) * dot(b_up, n))));
+  vec3 b = normalize((denom * (dot(b_up, n) * n)) - (denom * b_up));
+  vec3 t = normalize(cross(b, n));
+
+  mat3 TBN = mat3(vec3(t.x, b.x, n.x), vec3(t.y, b.y, n.y), vec3(t.z, b.z, n.z));
+
+  //lVec = normalize(TBN * lVec);
+  
+  //get the base texture and the bump from the textures
+  vec2 st = gl_TexCoord[0].st;
+  vec4 base = vec4(vec3(texture2D(colorMap, st).xyz), 1.0);
+  vec3 bump = normalize((texture2D(normalMap, st).rgb * 2.0) - 1.0);
+  bump = normalize(TBN * bump);
+
+  //ambient color
+  vec4 vAmbient = gl_LightSource[0].ambient * gl_FrontMaterial.ambient;
+
+  //diffuse
+  float diffuse = max(dot(lVec, bump), 0.0);
+  vec4 vDiffuse = gl_LightSource[0].diffuse * gl_FrontMaterial.diffuse * diffuse;
+
+  //specular
+  vec3 rVec = reflect(-lVec, bump);
+  float specular = dot(rVec, vVec);
+  if(specular < 0.0 || diffuse == 0.0){
+    specular = 0.0;
+  } else{
+    specular = pow(specular, gl_FrontMaterial.shininess);
+  }
+
+  vec4 vSpecular = vec4(1.0, 1.0, 1.0, 1.0) * specular;  
+  
+  //set the fragment final color
+  //gl_FragColor = vAmbient * base + vDiffuse * base + vSpecular;
+  gl_FragColor = base * vDiffuse + vAmbient * base;
+}
